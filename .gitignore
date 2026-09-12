@@ -1,0 +1,10 @@
+# NetOps - ignore runtime and build output
+backend/netops.db
+backend/app/__pycache__/
+backend/tests/__pycache__/
+backend/.pytest_cache/
+frontend/dist/
+frontend/node_modules/
+frontend/.env
+backend/devices.yaml
+*.bak

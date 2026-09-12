@@ -1,0 +1,21 @@
+# NetOps device inventory
+polling: 30
+devices:
+  - name: R-core
+    role: Core router
+    host: 192.168.1.1
+    method: ping
+  - name: E-14
+    role: Edge gateway
+    host: 192.168.1.14
+    method: https
+    metrics_url: https://192.168.1.14/metrics
+  - name: E-19
+    role: Edge gateway
+    host: 192.168.1.19
+    method: ping
+  - name: FW-02
+    role: Security firewall
+    host: 192.168.1.2
+    method: https
+    metrics_url: https://192.168.1.2/metrics

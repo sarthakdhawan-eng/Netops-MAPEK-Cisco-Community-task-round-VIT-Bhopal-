@@ -1,0 +1,91 @@
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+from .state import NetworkState, Action, Decision, Diagnosis, SimulationResult
+from .evaluator import RiskEvaluator, RiskEvaluation
+import uuid
+import time
+
+
+@dataclass
+class DecisionGateResult:
+    decision: str
+    risk_score: float
+    reasoning: List[str]
+    requires_approval: bool
+
+
+class DecisionGate:
+    AUTO_THRESHOLD = 0.3
+    REJECT_THRESHOLD = 0.7
+
+    def __init__(self):
+        self.evaluator = RiskEvaluator()
+        self.auto_count = 0
+        self.approve_count = 0
+        self.reject_count = 0
+
+    def decide(
+        self,
+        state: NetworkState,
+        action: Action,
+        diagnosis: Diagnosis,
+        simulation: SimulationResult
+    ) -> Decision:
+        evaluation = self.evaluator.evaluate(state, action, diagnosis, simulation)
+        risk_score = evaluation.risk_score
+
+        if risk_score < self.AUTO_THRESHOLD and simulation.safe and action.reversible:
+            decision_type = "auto_execute"
+            self.auto_count += 1
+            reasoning = evaluation.reasoning + [
+                f"Risk {risk_score:.2f} < {self.AUTO_THRESHOLD} (auto threshold)",
+                "Simulation clean and action reversible — AUTO-EXECUTE"
+            ]
+        elif risk_score < self.REJECT_THRESHOLD:
+            decision_type = "human_approve"
+            self.approve_count += 1
+            reasoning = evaluation.reasoning + [
+                f"Risk {risk_score:.2f} in [{self.AUTO_THRESHOLD}, {self.REJECT_THRESHOLD}) — REQUIRES HUMAN APPROVAL"
+            ]
+        else:
+            decision_type = "reject"
+            self.reject_count += 1
+            reasoning = evaluation.reasoning + [
+                f"Risk {risk_score:.2f} >= {self.REJECT_THRESHOLD} (reject threshold) — REJECTED"
+            ]
+
+        if not simulation.safe:
+            decision_type = "reject"
+            self.reject_count += 1
+            if self.reject_count > 0 and decision_type == "reject" and self.approve_count > 0:
+                self.approve_count -= 1
+            reasoning = evaluation.reasoning + [
+                "SIMULATION PREDICTS VIOLATIONS — ACTION REJECTED REGARDLESS OF RISK SCORE"
+            ]
+
+        if diagnosis.diagnosis_type == "security" and action.action_type == "isolate_device":
+            if decision_type == "auto_execute":
+                decision_type = "human_approve"
+                self.auto_count -= 1
+                self.approve_count += 1
+                reasoning.append("Security isolation escalated to human approval per policy")
+
+        decision = Decision(
+            id=str(uuid.uuid4())[:8],
+            timestamp=time.time(),
+            action_id=action.id,
+            decision=decision_type,
+            risk_score=risk_score,
+            simulation=simulation,
+            reasoning=reasoning,
+        )
+        state.decisions.append(decision)
+
+        return decision
+
+    def get_stats(self) -> Dict[str, int]:
+        return {
+            "auto_executed": self.auto_count,
+            "human_approve": self.approve_count,
+            "rejected": self.reject_count,
+        }

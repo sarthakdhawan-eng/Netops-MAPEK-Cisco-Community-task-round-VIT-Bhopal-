@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">NetOps Control Room overview</title>
+  <desc id="desc">Dark network operations dashboard showing network posture, incidents, telemetry, and a rotating topology cube.</desc>
+  <rect width="1440" height="900" fill="#0d1314"/>
+  <rect x="0" y="0" width="252" height="900" fill="#121b1c" stroke="#2c3d3e"/>
+  <g fill="#e9f0ed" font-family="Arial, sans-serif">
+    <text x="42" y="68" font-size="28" font-weight="700">NetOps</text>
+    <text x="42" y="145" fill="#93a7a3" font-size="12" letter-spacing="2">WORKSPACE</text>
+    <text x="42" y="174" font-size="15">Northstar / Production</text>
+    <circle cx="47" cy="202" r="5" fill="#78e2bd"/><text x="62" y="207" fill="#78e2bd" font-size="12">Connected</text>
+    <text x="42" y="280" fill="#e9f0ed" font-size="15">01  Overview</text>
+    <text x="42" y="326" fill="#93a7a3" font-size="15">02  Analytics</text>
+    <text x="42" y="372" fill="#93a7a3" font-size="15">03  Topology</text>
+    <text x="42" y="418" fill="#93a7a3" font-size="15">04  Incidents</text>
+    <text x="42" y="464" fill="#93a7a3" font-size="15">05  Change queue</text>
+  </g>
+  <g transform="translate(300 52)" font-family="Arial, sans-serif">
+    <text x="0" y="22" fill="#93a7a3" font-size="12" letter-spacing="2">SATURDAY, SEPTEMBER 12, 2026</text>
+    <text x="0" y="75" fill="#e9f0ed" font-size="48" font-weight="700">Overview</text>
+    <circle cx="5" cy="123" r="5" fill="#78e2bd"/><text x="20" y="128" fill="#78e2bd" font-family="monospace" font-size="13">Connected to control plane</text>
+    <rect x="260" y="100" width="112" height="44" fill="none" stroke="#2c3d3e"/><text x="283" y="128" fill="#e9f0ed" font-size="14">Refresh</text>
+    <rect x="390" y="100" width="150" height="44" fill="none" stroke="#2c3d3e"/><text x="414" y="128" fill="#e9f0ed" font-size="14">Export report</text>
+    <rect x="0" y="190" width="1065" height="165" fill="#182724" stroke="#4b7b6c"/>
+    <text x="28" y="226" fill="#93a7a3" font-family="monospace" font-size="12" letter-spacing="2">NETWORK POSTURE</text>
+    <text x="28" y="270" fill="#e9f0ed" font-size="25" font-weight="700">Stable, with attention</text>
+    <text x="28" y="303" fill="#93a7a3" font-size="14">One high-confidence diagnosis is ready for a controlled change.</text>
+    <circle cx="34" cy="334" r="5" fill="#78e2bd"/><text x="52" y="339" fill="#c0cdc9" font-family="monospace" font-size="12">47 devices monitored</text>
+    <text x="865" y="339" fill="#c0cdc9" font-family="monospace" font-size="12">Updated 12 sec ago</text>
+    <g transform="translate(0 382)">
+      <rect width="345" height="188" fill="#152222" stroke="#2c3d3e"/><rect x="365" width="345" height="188" fill="#152222" stroke="#2c3d3e"/><rect x="730" width="335" height="188" fill="#152222" stroke="#2c3d3e"/>
+      <text x="28" y="36" fill="#93a7a3" font-family="monospace" font-size="12" letter-spacing="2">ACTIVE INCIDENTS</text><text x="28" y="104" fill="#e9f0ed" font-size="48" font-weight="700">03</text><text x="28" y="151" fill="#f1c477" font-family="monospace" font-size="13">1 high severity</text>
+      <text x="393" y="36" fill="#93a7a3" font-family="monospace" font-size="12" letter-spacing="2">AUTO-RESOLVED TODAY</text><text x="393" y="104" fill="#e9f0ed" font-size="48" font-weight="700">18</text><text x="393" y="151" fill="#78e2bd" font-family="monospace" font-size="13">+12% vs yesterday</text>
+      <text x="758" y="36" fill="#93a7a3" font-family="monospace" font-size="12" letter-spacing="2">CHANGE RISK</text><text x="758" y="104" fill="#e9f0ed" font-size="48" font-weight="700">Low</text><text x="758" y="151" fill="#93a7a3" font-family="monospace" font-size="13">0.18 average score</text>
+    </g>
+    <rect x="0" y="610" width="1065" height="92" fill="#172522" stroke="#4b7b6c"/><text x="28" y="646" fill="#93a7a3" font-family="monospace" font-size="12" letter-spacing="2">CONTROL-PLANE INTEGRITY</text><text x="28" y="677" fill="#e9f0ed" font-size="14">Telemetry is connected; action orchestration is server-gated.</text>
+  </g>
+  <g transform="translate(1200 130) rotate(-18)" opacity=".55" stroke="#78e2bd" stroke-width="2" fill="#183b35"><path d="M0 35 58 0 116 35 58 70Z"/><path d="M0 35v70l58 35V70Z" fill="#12312d"/><path d="M116 35v70l-58 35V70Z" fill="#21453d"/><path d="M0 35 58 70 116 35" fill="none"/></g>
+</svg>
