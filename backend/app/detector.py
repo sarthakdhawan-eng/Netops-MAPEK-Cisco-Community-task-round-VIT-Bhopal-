@@ -93,11 +93,7 @@ class AnomalyDetector:
                     self._reset_sustained(device.id, metric)
                     sustained = 0
 
-                triggered = False
-                if abs_exceeded and (sustained >= 1 or z_exceeded):
-                    triggered = True
-                elif z_exceeded and sustained >= threshold["sustained_ticks"]:
-                    triggered = True
+                triggered = sustained >= threshold["sustained_ticks"] and (abs_exceeded or z_exceeded)
 
                 if triggered:
                     severity = "critical" if abs(z_score) > 3.5 else "high" if abs(z_score) > 2.5 else "medium"

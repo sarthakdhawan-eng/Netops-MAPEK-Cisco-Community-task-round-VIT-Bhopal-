@@ -24,7 +24,10 @@ def run_mapek_pipeline(state: NetworkState) -> dict:
     gate = DecisionGate()
     executor = ActionExecutor()
 
-    anomalies = detector.detect(state)
+    sample_count = max(threshold["sustained_ticks"] for threshold in detector.THRESHOLDS.values())
+    anomalies = []
+    for _ in range(sample_count):
+        anomalies = detector.detect(state)
     diagnoses = diagnoser.diagnose(state, anomalies)
     if not diagnoses:
         return {
