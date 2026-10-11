@@ -36,6 +36,8 @@ let authChecked = false;
 let authenticatedUser = null;
 let authMode = 'login';
 let authError = '';
+let authMessage = '';
+let authDraft = { name: '', email: '' };
 let inspectionOpen = false;
 let cubeScrollHandler = null;
 let activity = [
@@ -115,7 +117,11 @@ function overviewView() {
 }
 
 function authView() {
-  return `<div class="auth-shell"><section class="auth-card"><div class="brand auth-brand"><span>NetOps</span></div><span class="eyebrow">AI network assistant</span><h1>${authMode === 'login' ? 'Sign in to continue' : 'Create operator account'}</h1><p class="auth-subtitle">Give the agent a secure workspace to observe signals, explain anomalies, and guide safe recovery.</p><form id="auth-form" class="auth-form">${authMode === 'signup' ? '<label>Display name<input name="name" autocomplete="name" required></label>' : ''}<label>Email address<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" autocomplete="${authMode === 'login' ? 'current-password' : 'new-password'}" minlength="10" required></label>${authMode === 'signup' ? '<small>Use at least 10 characters.</small>' : ''}${authError ? `<div class="auth-error">${authError}</div>` : ''}<button class="auth-submit" type="submit">${authMode === 'login' ? 'Authenticate operator' : 'Create secure account'}</button></form><button class="auth-switch" id="auth-switch">${authMode === 'login' ? 'Need an account? Create one' : 'Already have an account? Sign in'}</button><div class="auth-session"><span class="status-dot"><i></i> Secure session ready</span><span>Session expires after 8 hours</span></div></section></div>`;
+  return `<div class="auth-shell"><section class="auth-card"><div class="brand auth-brand"><span>NetOps</span></div><span class="eyebrow">AI network assistant</span><h1>${authMode === 'login' ? 'Sign in to continue' : 'Create operator account'}</h1><p class="auth-subtitle">Give the agent a secure workspace to observe signals, explain anomalies, and guide safe recovery.</p><form id="auth-form" class="auth-form">${authMode === 'signup' ? `<label>Display name<input name="name" autocomplete="name" value="${escapeHtml(authDraft.name)}" required></label>` : ''}<label>Email address<input name="email" type="email" autocomplete="email" value="${escapeHtml(authDraft.email)}" required></label><label>Password<input name="password" type="password" autocomplete="${authMode === 'login' ? 'current-password' : 'new-password'}" minlength="10" required></label>${authMode === 'signup' ? '<small>Use at least 10 characters.</small>' : ''}${authError ? `<div class="auth-error" role="alert">${escapeHtml(authError)}</div>` : ''}${authMessage ? `<div class="auth-message" role="status">${escapeHtml(authMessage)}</div>` : ''}<button class="auth-submit" type="submit">${authMode === 'login' ? 'Authenticate operator' : 'Create secure account'}</button></form><button class="auth-switch" id="auth-switch">${authMode === 'login' ? 'Need an account? Create one' : 'Already have an account? Sign in'}</button><div class="auth-session"><span class="status-dot"><i></i> Secure session ready</span><span>Session expires after 8 hours</span></div></section></div>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
 function inspectionPanel() {
@@ -198,7 +204,7 @@ function bindEvents() {
 }
 
 function bindAuthEvents() {
-  document.querySelector('#auth-switch')?.addEventListener('click', () => { authMode = authMode === 'login' ? 'signup' : 'login'; authError = ''; render(); });
+  document.querySelector('#auth-switch')?.addEventListener('click', () => { authMode = authMode === 'login' ? 'signup' : 'login'; authError = ''; authMessage = ''; render(); });
   document.querySelector('#auth-form')?.addEventListener('submit', submitAuth);
   startShader();
 }
@@ -206,6 +212,9 @@ function bindAuthEvents() {
 async function submitAuth(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
+  authDraft = { name: String(form.get('name') || ''), email: String(form.get('email') || '') };
+  authError = '';
+  authMessage = '';
   const endpoint = authMode === 'login' ? '/api/login' : '/api/signup';
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.get('email'), password: form.get('password'), display_name: form.get('name') || form.get('email') }) });
@@ -213,16 +222,20 @@ async function submitAuth(event) {
     if (!response.ok) throw new Error(result.error || 'Authentication failed');
     if (authMode === 'signup') {
       authMode = 'login';
-      authError = 'Account created. Sign in with the matching credentials.';
+      authDraft = { name: '', email: authDraft.email };
+      authMessage = 'Account created. Sign in with the email and password you just registered.';
       render();
       return;
     }
     localStorage.setItem('netops_session', result.token);
     authenticatedUser = result.user;
     authError = '';
+    authMessage = '';
+    authDraft = { name: '', email: '' };
     render();
     hydrateFromApi();
   } catch (error) {
+    authMessage = '';
     authError = error.message;
     render();
   }
