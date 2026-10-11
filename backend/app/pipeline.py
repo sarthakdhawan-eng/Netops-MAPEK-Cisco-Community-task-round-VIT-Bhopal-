@@ -1,7 +1,6 @@
-"""End-to-end MAPE-K orchestration for the runtime system.
+"""Standalone MAPE-K demonstration pipeline over in-memory simulated state.
 
-This is the missing production entry point that connects the OO pipeline used by the
-suite into the running backend process.
+The HTTP API's decision routes are separate and do not invoke this pipeline.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from .state import NetworkState
 
 
 def run_mapek_pipeline(state: NetworkState) -> dict:
-    """Run the full detect → diagnose → plan → simulate → decide → execute flow."""
+    """Run the detect → diagnose → plan → simulate → decide → simulated-apply flow."""
     detector = AnomalyDetector()
     diagnoser = NetworkDiagnoser()
     planner = ActionPlanner()
@@ -31,6 +30,8 @@ def run_mapek_pipeline(state: NetworkState) -> dict:
     diagnoses = diagnoser.diagnose(state, anomalies)
     if not diagnoses:
         return {
+            "execution_mode": "simulation_only",
+            "device_operation_performed": False,
             "diagnosis": None,
             "actions": [],
             "decision": "reject",
@@ -42,6 +43,8 @@ def run_mapek_pipeline(state: NetworkState) -> dict:
     actions = planner.plan(state, diagnosis)
     if not actions:
         return {
+            "execution_mode": "simulation_only",
+            "device_operation_performed": False,
             "diagnosis": diagnosis.to_dict(),
             "actions": [],
             "decision": "reject",
@@ -55,12 +58,15 @@ def run_mapek_pipeline(state: NetworkState) -> dict:
     execution = executor.execute(state, action, decision)
 
     return {
+        "execution_mode": "simulation_only",
+        "device_operation_performed": False,
         "diagnosis": diagnosis.to_dict(),
         "actions": [a.to_dict() for a in actions],
         "decision": decision.decision,
         "reason": decision.reasoning[-1] if decision.reasoning else "No reasoning",
         "execution": {
-            "success": execution.success,
+            "simulated": execution.success,
+            "execution_mode": "simulation_only",
             "message": execution.message,
             "rollback_available": execution.rollback_available,
             "details": execution.details,

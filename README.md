@@ -8,8 +8,8 @@ Netops is a control-room prototype for the Cisco Community VIT Bhopal 2026 task 
 
 - Authenticated control-room dashboard with Overview, Analytics, Topology, Incidents, and Change Queue views.
 - SQLite-backed Python API with sessions, telemetry, incidents, analyst notes, and audit events.
-- Detect -> Understand -> Plan -> Evaluate -> Decide -> Execute lifecycle modules.
-- Safety simulation and approval gates before a change can enter the queue.
+- Detect -> Understand -> Plan -> Evaluate -> Decide -> Simulated Apply lifecycle modules.
+- Safety simulation and approval gates; device operations are simulated only.
 - Scroll-driven topology cube and a tokenized, gradient-free visual system.
 - Automated GitHub Actions checks for backend tests and the frontend production build.
 
@@ -73,7 +73,7 @@ Before exposing the API publicly:
 1. Set an explicit `FRONTEND_ORIGIN` value.
 2. Put the SQLite database on persistent storage or replace it with a managed database.
 3. Run the API behind TLS and a reverse proxy.
-4. Configure real device integrations instead of the simulator-only executor.
+4. Implement and independently review a real device adapter before any device operations. The current API decision flow and MAPE-K executor do not contact devices.
 
 ## Repository Layout
 

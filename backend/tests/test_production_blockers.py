@@ -6,6 +6,19 @@ from app.pipeline import run_mapek_pipeline
 def test_decide_action_helper_is_available_and_consistent():
     assert decide_action(18, True, "Operational") in {"auto", "approval"}
     assert decide_action(90, False, "Security") == "rejected"
+    assert decide_action(10, True, "Operational", reversible=False) == "approval"
+
+
+def test_planner_rejects_unknown_actions_and_uses_explicit_reversibility():
+    import pytest
+    from app.planner import risk_score, simulate
+
+    with pytest.raises(ValueError, match="Unsupported action"):
+        risk_score("Run arbitrary command", "Low", "Operational")
+    with pytest.raises(ValueError, match="Unsupported action"):
+        simulate("Run arbitrary command", 50)
+    assert risk_score("Failover", "High", "Operational")["reversible"] is True
+    assert risk_score("Isolate device", "High", "Security")["reversible"] is True
 
 
 def test_mapek_pipeline_runs_end_to_end():

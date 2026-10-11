@@ -21,7 +21,8 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "netops.db"
 SESSION_TTL = 60 * 60 * 8
-FRONTEND_ORIGINS = {origin.strip() for origin in os.getenv("FRONTEND_ORIGIN", "http://127.0.0.1:5173,http://127.0.0.1:4173").split(",") if origin.strip()}
+FRONTEND_ORIGINS = {origin.strip() for origin in os.getenv("FRONTEND_ORIGIN", "").split(",") if origin.strip()}
+MAX_REQUEST_BYTES = 1_048_576
 
 INCIDENTS = [
     {"id": "INC-2048", "title": "Core router saturation", "device": "R-core", "type": "Operational", "severity": "High", "confidence": 96, "age": "04 min", "metric": "CPU 95%", "detail": "Queue depth is rising across two downstream edges.", "action": "Reroute traffic", "risk": 18},
@@ -165,11 +166,12 @@ def json_response(handler: BaseHTTPRequestHandler, payload: dict, status: int = 
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
     request_origin = handler.headers.get("Origin", "")
-    allowed_origin = request_origin if request_origin in FRONTEND_ORIGINS else next(iter(FRONTEND_ORIGINS), "")
-    handler.send_header("Access-Control-Allow-Origin", allowed_origin)
+    if request_origin and request_origin in FRONTEND_ORIGINS:
+        handler.send_header("Access-Control-Allow-Origin", request_origin)
     handler.send_header("Vary", "Origin")
-    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    if request_origin in FRONTEND_ORIGINS:
+        handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -179,6 +181,10 @@ class Handler(BaseHTTPRequestHandler):
         return
 
     def do_OPTIONS(self) -> None:
+        origin = self.headers.get("Origin", "")
+        if origin and origin not in FRONTEND_ORIGINS:
+            json_response(self, {"error": "Origin is not allowed"}, 403)
+            return
         json_response(self, {})
 
     def do_GET(self) -> None:
@@ -190,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
                 json_response(self, {"error": "Authentication required"}, 401)
                 return
             if path == "/api/health":
-                json_response(self, {"status": "ok", "database": str(DB_PATH), "connected": True})
+                json_response(self, {"status": "ok", "connected": True})
                 return
             if path == "/api/state":
                 incidents = [json.loads(row["payload"]) for row in connection.execute("SELECT payload FROM incidents ORDER BY updated_at DESC")]
@@ -221,9 +227,15 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > MAX_REQUEST_BYTES:
+                json_response(self, {"error": "Request body is too large"}, 413)
+                return
             payload = json.loads(self.rfile.read(length) or b"{}")
         except (ValueError, json.JSONDecodeError):
             json_response(self, {"error": "Request body must be valid JSON"}, 400)
+            return
+        if not isinstance(payload, dict):
+            json_response(self, {"error": "Request body must be a JSON object"}, 400)
             return
 
         with connect() as connection:
@@ -306,7 +318,7 @@ class Handler(BaseHTTPRequestHandler):
                 json_response(self, {"saved": True})
                 return
             if path == "/api/simulate":
-                from .planner import decide, risk_score, simulate
+                from .planner import ACTIONS, decide, risk_score, simulate
                 incident_id = str(payload.get("incident_id", ""))
                 row = connection.execute("SELECT payload FROM incidents WHERE id = ?", (incident_id,)).fetchone() if incident_id else None
                 if not row:
@@ -314,20 +326,24 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 incident = json.loads(row["payload"])
                 action = str(payload.get("action", "")).strip()
-                if not action:
-                    json_response(self, {"error": "Action is required"}, 400)
+                if action not in ACTIONS:
+                    json_response(self, {"error": "Action is missing or unsupported"}, 400)
                     return
                 category = "Security" if incident.get("type") == "Security" else "Operational"
                 current_cpu = 95.0 if incident.get("device") == "R-core" else 70.0
                 scored = risk_score(action, incident.get("severity", "High"), category)
-                result = simulate(action, current_cpu, capacity_margin=float(payload.get("capacity_margin", 25.0)))
-                decision = decide(scored["risk"], result["passed"], category)
+                try:
+                    result = simulate(action, current_cpu, capacity_margin=float(payload.get("capacity_margin", 25.0)))
+                except (TypeError, ValueError):
+                    json_response(self, {"error": "capacity_margin must be a number between 0 and 100"}, 400)
+                    return
+                decision = decide(scored["risk"], result["passed"], category, scored["reversible"])
                 connection.execute("INSERT INTO decisions (incident_id, action, risk, simulated_passed, decision, created_at) VALUES (?, ?, ?, ?, ?, ?)", (incident_id or "adhoc", action, scored["risk"], int(result["passed"]), decision, time.time()))
                 connection.execute("INSERT INTO audit_events (source, message, tone, created_at) VALUES (?, ?, ?, ?)", ("Simulator", f"{action} for {incident_id or 'adhoc'}: {result['reason']} -> {decision}", "good" if result["passed"] else "critical", time.time()))
-                json_response(self, {"incident_id": incident_id, "action": action, "risk": scored["risk"], "factors": scored["factors"], "predicted_cpu": result["predicted_cpu"], "passed": result["passed"], "reason": result["reason"], "decision": decision})
+                json_response(self, {"incident_id": incident_id, "action": action, "risk": scored["risk"], "factors": scored["factors"], "reversible": scored["reversible"], "predicted_cpu": result["predicted_cpu"], "passed": result["passed"], "reason": result["reason"], "decision": decision, "execution_mode": "simulation_only", "device_operation_performed": False})
                 return
             if path == "/api/decide":
-                from .planner import decide_action
+                from .planner import decide_action, risk_score
                 incident_id = str(payload.get("incident_id", "")).strip()
                 row = connection.execute("SELECT payload FROM incidents WHERE id = ?", (incident_id,)).fetchone() if incident_id else None
                 if not row:
@@ -345,9 +361,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not latest or not latest["simulated_passed"]:
                     json_response(self, {"error": "A passing server-side simulation is required"}, 409)
                     return
-                decision = decide_action(int(latest["risk"]), True, "Security" if incident.get("type") == "Security" else "Operational")
+                action_policy = risk_score(action, incident.get("severity", "High"), "Security" if incident.get("type") == "Security" else "Operational")
+                decision = decide_action(int(latest["risk"]), True, "Security" if incident.get("type") == "Security" else "Operational", action_policy["reversible"])
                 connection.execute("INSERT INTO decisions (incident_id, action, risk, simulated_passed, decision, created_at) VALUES (?, ?, ?, ?, ?, ?)", (incident_id, action, int(latest["risk"]), 1, decision, time.time()))
-                json_response(self, {"decision": decision, "incident_id": incident_id, "action": action, "risk": int(latest["risk"])})
+                json_response(self, {"decision": decision, "incident_id": incident_id, "action": action, "risk": int(latest["risk"]), "scope": "decision_only", "execution_mode": "simulation_only", "device_operation_performed": False})
                 return
             if path == "/api/inject-fault":
                 from .detection import detect_device

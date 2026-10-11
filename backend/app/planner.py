@@ -5,8 +5,8 @@ ACTIONS = {
     "Reroute traffic": {"blast": 30, "reversible": True, "effect": -28.0},
     "Rate limit": {"blast": 20, "reversible": True, "effect": -12.0},
     "Block source IPs": {"blast": 55, "reversible": True, "effect": -8.0},
-    "Failover": {"blast": 45, "reversible": False, "effect": -35.0},
-    "Isolate device": {"blast": 80, "reversible": False, "effect": -45.0},
+    "Failover": {"blast": 45, "reversible": True, "effect": -35.0},
+    "Isolate device": {"blast": 80, "reversible": True, "effect": -45.0},
 }
 
 def plan(category: str, severity: str) -> list[str]:
@@ -17,7 +17,9 @@ def plan(category: str, severity: str) -> list[str]:
     return ["Reroute traffic", "Rate limit", "Failover"]
 
 def risk_score(action: str, severity: str, category: str) -> dict:
-    spec = ACTIONS.get(action, {"blast": 40, "reversible": True, "effect": -10.0})
+    if action not in ACTIONS:
+        raise ValueError(f"Unsupported action: {action}")
+    spec = ACTIONS[action]
     severity_weight = {"Low": 5, "Medium": 15, "High": 25, "Critical": 35}.get(severity, 15)
     reversibility = 0 if spec["reversible"] else 20
     security_uplift = 10 if category == "Security" and action == "Isolate device" else 0
@@ -26,7 +28,11 @@ def risk_score(action: str, severity: str, category: str) -> dict:
     return {"risk": score, "factors": factors, "reversible": spec["reversible"]}
 
 def simulate(action: str, current_cpu: float, capacity_margin: float = 25.0) -> dict:
-    spec = ACTIONS.get(action, {"effect": -10.0, "reversible": True})
+    if action not in ACTIONS:
+        raise ValueError(f"Unsupported action: {action}")
+    if not 0 <= capacity_margin <= 100:
+        raise ValueError("capacity_margin must be between 0 and 100")
+    spec = ACTIONS[action]
     predicted = max(5.0, current_cpu + spec["effect"])
     overload = predicted > (100.0 - capacity_margin)
     # Unsafe-remediation guard: failover while spare capacity is thin creates a new failure.
@@ -39,22 +45,18 @@ def simulate(action: str, current_cpu: float, capacity_margin: float = 25.0) -> 
         reason = "Blocked: predicted load exceeds safe capacity margin"
     return {"passed": passed, "predicted_cpu": round(predicted, 1), "reason": reason, "unsafe": unsafe}
 
-def decide_action(risk: int, simulated_passed: bool, category: str) -> str:
-    """Single source of truth for the approval gate used by both the API and the pipeline.
-
-    This avoids the production crash caused by the UI calling /api/decide while the
-    planner exposes only decide() instead of the actual runtime entry point name.
-    """
+def decide_action(risk: int, simulated_passed: bool, category: str, reversible: bool = True) -> str:
+    """Return the API policy decision; this does not perform device execution."""
     if not simulated_passed:
         return "rejected"
-    if category == "Security" and risk >= 60:
+    if risk >= 70:
+        return "rejected"
+    if not reversible or (category == "Security" and risk >= 60):
         return "approval"
-    if risk < 20:
+    if risk < 30:
         return "auto"
-    if risk <= 50:
-        return "approval"
-    return "rejected"
+    return "approval"
 
 
-def decide(risk: int, simulated_passed: bool, category: str) -> str:
-    return decide_action(risk, simulated_passed, category)
+def decide(risk: int, simulated_passed: bool, category: str, reversible: bool = True) -> str:
+    return decide_action(risk, simulated_passed, category, reversible)

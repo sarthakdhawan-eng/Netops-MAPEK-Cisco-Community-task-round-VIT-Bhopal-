@@ -213,6 +213,25 @@ class TestDecisionGate:
         assert decision.decision == "reject"
         assert any("SIMULATION" in r and "VIOLATIONS" in r for r in decision.reasoning)
 
+    def test_irreversible_action_requires_approval(self):
+        from app.state import Action, Diagnosis
+        from app.simulator import SimulationResult
+        import time
+        action = Action(
+            id="act-irreversible", timestamp=time.time(), action_type="restart_service",
+            target_device="R-core", parameters={}, preconditions=[], effects=[],
+            blast_radius=["R-core"], reversible=False, rollback_plan="monitor"
+        )
+        diagnosis = Diagnosis(
+            id="diag-irreversible", timestamp=time.time(), root_cause_device="R-core",
+            anomaly_ids=[], diagnosis_type="operational", confidence=0.8,
+            reasoning=[], affected_devices=["R-core"]
+        )
+        sim = SimulationResult(action_id=action.id, safe=True, predicted_metrics={}, new_violations=[], reasoning=[])
+        decision = self.gate.decide(self.state, action, diagnosis, sim)
+        assert decision.decision == "human_approve"
+        assert self.gate.get_stats()["human_approve"] == 1
+
 
 class TestExecutor:
     def setup_method(self):
@@ -328,3 +347,30 @@ class TestExecutor:
         rollback_result = self.executor.rollback(self.state, "act-4")
         assert not rollback_result.success
         assert "not reversible" in rollback_result.message
+
+    def test_failover_rollback_restores_both_devices(self):
+        from app.state import Action, Diagnosis
+        from app.simulator import SimulationResult
+        import time
+        standby = self.state.get_device("E1")
+        action = Action(
+            id="act-failover", timestamp=time.time(), action_type="failover",
+            target_device="R-core", parameters={"standby_id": "E1"}, preconditions=[], effects=[],
+            blast_radius=["R-core", "E1"], reversible=True, rollback_plan="failback"
+        )
+        diagnosis = Diagnosis(
+            id="diag-failover", timestamp=time.time(), root_cause_device="R-core",
+            anomaly_ids=[], diagnosis_type="operational", confidence=0.8,
+            reasoning=[], affected_devices=["R-core", "E1"]
+        )
+        sim = SimulationResult(action_id=action.id, safe=True, predicted_metrics={}, new_violations=[], reasoning=[])
+        decision = self.gate.decide(self.state, action, diagnosis, sim)
+        # Force the executor through its simulated path; gate policy itself remains tested above.
+        decision.decision = "auto_execute"
+        before = (standby.cpu, standby.queue_depth)
+        result = self.executor.execute(self.state, action, decision)
+        assert result.success
+        assert (standby.cpu, standby.queue_depth) != before
+        rolled_back = self.executor.rollback(self.state, action.id)
+        assert rolled_back.success
+        assert (standby.cpu, standby.queue_depth) == before

@@ -42,13 +42,19 @@ Returns `{incident_id, answer, confidence, recommended_action, category, candida
 ```json
 {"incident_id":"INC-2048","action":"Reroute traffic","capacity_margin":25.0}
 ```
-Returns `{action, risk, factors, predicted_cpu, passed, reason, decision}` and persists the decision.
+Returns `{action, risk, factors, reversible, predicted_cpu, passed, reason, decision, execution_mode, device_operation_performed}` and persists the decision. `execution_mode` is `simulation_only`; this route never contacts a device.
 
 ### POST /api/decide
 ```json
 {"incident_id":"INC-2048","action":"Reroute traffic","risk":28,"simulated_passed":true,"category":"Operational"}
 ```
-Returns `{decision}` where decision is `auto`, `approval`, or `rejected`.
+Returns `{decision, scope, execution_mode, device_operation_performed}` where decision is `auto`, `approval`, or `rejected`. This records an API decision only; it does not call the separate in-memory MAPE-K executor or change a device. Both API routes use the same action policy. Unknown actions and invalid simulation capacity are rejected.
+
+The MAPE-K pipeline's executor also only changes in-memory demo state. Its response labels this as `simulation_only`. No network-device adapter is implemented, and no API route performs real device execution. Irreversible actions cannot be auto-approved; rollback is available only for actions marked reversible. Failover rollback restores both the primary and standby snapshots.
+
+## Security defaults
+
+The API binds to `127.0.0.1` by default. Browser origins are denied by default; set `FRONTEND_ORIGIN` to an explicit comma-separated allowlist when serving the UI from a separate origin. Requests are limited to 1 MiB and JSON request bodies must be objects. Health responses do not expose local database paths. These controls do not replace TLS, a production server, rate limiting, or managed secrets when deploying behind a public endpoint.
 
 ### POST /api/inject-fault
 Injects a telemetry series, runs detection, stores history, and creates an incident when sustained.
